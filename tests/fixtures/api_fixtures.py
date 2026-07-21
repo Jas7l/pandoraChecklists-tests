@@ -3,6 +3,7 @@ import pytest
 from tests.config.settings import settings
 from tests.api.clients import (
     AreasClient,
+    PositionsClient,
 )
 from tests.utils.logger import get_logger
 
@@ -18,3 +19,14 @@ def areas_client():
 
     client.close()
     logger.info('Areas client closed after test')
+
+
+@pytest.fixture(scope='session')
+def positions_client():
+    """Positions API client"""
+
+    client = PositionsClient(settings.api_url)
+    yield client
+
+    client.close()
+    logger.info('Positions client closed after test')
