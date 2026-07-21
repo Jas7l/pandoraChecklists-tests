@@ -1,0 +1,17 @@
+# Core Testing Framework
+pytest==8.3.2
+pytest-timeout==2.1.0
+
+# Playwright for UI Testing
+playwright==1.40.0
+pytest-playwright==0.4.4
+
+# Allure Reporting
+allure-pytest==2.16.0
+allure-python-commons==2.16.0
+
+# Configuration Management
+python-dotenv==1.2.2
+
+# Utilities
+requests==2.31.0
