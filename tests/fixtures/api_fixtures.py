@@ -5,6 +5,7 @@ from tests.api.clients import (
     AreasClient,
     PositionsClient,
     EmployeesClient,
+    TasksClient,
 )
 from tests.utils.logger import get_logger
 
@@ -32,6 +33,7 @@ def positions_client():
     client.close()
     logger.info('Positions client closed after test')
 
+
 @pytest.fixture(scope='session')
 def employees_client():
     """Employees API client"""
@@ -41,3 +43,14 @@ def employees_client():
 
     client.close()
     logger.info('Employees client closed after test')
+
+
+@pytest.fixture(scope='session')
+def tasks_client():
+    """Tasks API client"""
+
+    client = TasksClient(settings.api_url)
+    yield client
+
+    client.close()
+    logger.info('Tasks client closed after test')
