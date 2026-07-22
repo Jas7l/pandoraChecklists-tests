@@ -46,6 +46,7 @@ class TestPositionsAPI:
     """Test suite for Positions API endpoints"""
 
     TEST_NAME = 'test position'
+    TEST_BADGE = 12345678
     TEST_INVALID_ID = 9999999
     TEST_LIMIT = 10
     TEST_OFFSET = 1
@@ -393,6 +394,7 @@ class TestPositionsAPI:
                         )
                         AllureReporting.attach_response(
                             response.status_code,
+                            response.json(),
                         )
 
                         Assert.response_status(response.status_code, 204)
@@ -479,6 +481,7 @@ class TestPositionsAPI:
             )
             AllureReporting.attach_response(
                 response.status_code,
+                response.json(),
             )
 
         with AllureReporting.add_step('Verify error response'):
@@ -643,5 +646,155 @@ class TestPositionsAPI:
 
                 Assert.response_status(response.status_code, 204)
                 logger.info(f'Position {position_id} deleted (cleanup)')
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Delete position')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-012: Delete position that is assigned to employee')
+    @pytest.mark.negative
+    def test_delete_position_assigned_to_employee(
+            self, positions_client, employees_client, test_data,
+    ):
+
+        logger.info('>>> TEST: Delete position assigned to employee')
+
+        created_employee_id = None
+        new_position_id = None
+
+        with AllureReporting.add_step('Get existing employee'):
+            response = employees_client.get_employees_list(limit=1, offset=0)
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                employees = response.json()
+                Assert.is_not_empty(employees)
+                employee = employees[0]
+                logger.info(
+                    f'Found employee: ID={employee.get("employee_id")}, '
+                    f'Name={employee.get("employee_name")}',
+                )
+
+            except AssertionError:
+                logger.error('Failed to get employee for test')
+                pytest.fail('No employee found in the system')
+
+        with AllureReporting.add_step(
+            f'Create position "{self.TEST_NAME}" and assign to employee',
+        ):
+            position_response = positions_client.create_position(
+                self.TEST_NAME,
+            )
+            Assert.response_status(position_response.status_code, 201)
+            new_position = position_response.json()
+            new_position_id = new_position.get('position_id')
+            logger.info(f'Position created with ID: {new_position_id}')
+
+            response = employees_client.create_employee(
+                employee_name=employee.get('employee_name'),
+                employee_surname=employee.get('employee_surname'),
+                employee_patronymic=employee.get('employee_patronymic'),
+                area_id=employee.get('area_id', []),
+                position_id=new_position_id,
+                employee_badge=self.TEST_BADGE,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+            try:
+                Assert.response_status(response.status_code, 201)
+                created_employee = response.json()
+                created_employee_id = created_employee.get('employee_id')
+                logger.info(
+                    f'Employee created with ID: {created_employee_id} '
+                    f'assigned to position {new_position_id}',
+                )
+
+            except AssertionError:
+                logger.error('Failed to create employee for test')
+                response = positions_client.delete_position(new_position_id)
+                Assert.response_status(response.status_code, 204)
+                logger.info(
+                    f'Position {new_position_id} deleted (cleanup)',
+                )
+                pytest.fail(
+                    f'Employee creation failed, position {new_position_id} '
+                    f'deleted',
+                )
+
+        with AllureReporting.add_step(
+            f'Try to delete position {new_position_id} assigned to employee',
+        ):
+            response = positions_client.delete_position(new_position_id)
+            AllureReporting.attach_response(
+                response.status_code,
+            )
+
+        try:
+            with AllureReporting.add_step('Verify conflict response'):
+                Assert.response_status(response.status_code, 409)
+                logger.info(
+                    'Received expected 409 conflict error - '
+                    'position assigned to employee',
+                )
+        except AssertionError:
+            logger.error(
+                f'Expected 409 conflict, got {response.status_code}',
+            )
+            pytest.fail(
+                f'Expected 409 conflict error for deleting position '
+                f'assigned to employee, got status {response.status_code}',
+            )
+
+        finally:
+            position_deleted_flag = response.status_code == 204
+
+            with AllureReporting.add_step(
+                f'Cleanup - delete created employee {created_employee_id}',
+            ):
+                response = employees_client.delete_employee(
+                    created_employee_id,
+                )
+                AllureReporting.attach_response(response.status_code)
+
+                try:
+                    Assert.response_status(response.status_code, 204)
+                    logger.info(
+                        f'Employee {created_employee_id} deleted (cleanup)',
+                    )
+
+                except AssertionError:
+                    logger.error(
+                        f'Employee {created_employee_id} deletion failed',
+                    )
+                    pytest.fail('Employee cleanup failed')
+
+            if not position_deleted_flag:
+                with AllureReporting.add_step(
+                    f'Cleanup - delete created position {new_position_id}',
+                ):
+                    response = positions_client.delete_position(
+                        new_position_id,
+                    )
+                    AllureReporting.attach_response(response.status_code)
+
+                    try:
+                        Assert.response_status(response.status_code, 204)
+                        logger.info(
+                            f'Position {new_position_id} deleted (cleanup)',
+                        )
+
+                    except AssertionError:
+                        logger.error(
+                            f'Position {new_position_id} deletion failed',
+                        )
+                        pytest.fail('Position cleanup failed')
 
         logger.info('<<< TEST PASSED')
