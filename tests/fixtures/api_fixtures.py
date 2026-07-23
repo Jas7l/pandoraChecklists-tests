@@ -6,6 +6,7 @@ from tests.api.clients import (
     PositionsClient,
     EmployeesClient,
     TasksClient,
+    MachinesClient,
 )
 from tests.utils.logger import get_logger
 
@@ -54,3 +55,14 @@ def tasks_client():
 
     client.close()
     logger.info('Tasks client closed after test')
+
+
+@pytest.fixture(scope='session')
+def machines_client():
+    """Machines API client"""
+
+    client = MachinesClient(settings.api_url)
+    yield client
+
+    client.close()
+    logger.info('Machines client closed after test')

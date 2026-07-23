@@ -46,6 +46,7 @@ class TestAreasAPI:
     """Test suite for Areas API endpoints"""
 
     TEST_NAME = 'test area'
+    TEST_MACHINE_NAME = 'test machine'
     TEST_BADGE = 12345678
     TEST_INVALID_ID = 9999999
     TEST_LIMIT = 10
@@ -757,6 +758,123 @@ class TestAreasAPI:
                         Assert.response_status(
                             response.status_code, 204,
                         )
+                        logger.info(f'Area {new_area_id} deleted (cleanup)')
+
+                    except AssertionError:
+                        logger.error(f'Area {new_area_id} deletion failed')
+                        pytest.fail('Area cleanup failed')
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Delete area')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-012: Delete area that is assigned to machine')
+    @pytest.mark.negative
+    def test_delete_area_assigned_to_machine(
+            self, areas_client, machines_client, test_data,
+    ):
+
+        logger.info('>>> TEST: Delete area assigned to machine')
+
+        with AllureReporting.add_step(
+            f'Create area "{self.TEST_NAME}" and assign to machine',
+        ):
+            response = areas_client.create_area(self.TEST_NAME)
+            try:
+                Assert.response_status(response.status_code, 201)
+            except AssertionError:
+                logger.error('Failed to create area for test')
+                pytest.fail(
+                    f'Area creation failed for name="{self.TEST_NAME}"',
+                )
+
+            new_area = response.json()
+            new_area_id = new_area.get('area_id')
+            logger.info(f'Area created with ID: {new_area_id}')
+
+            response = machines_client.create_machine(
+                machine_name=self.TEST_MACHINE_NAME,
+                area_id=new_area_id,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+            try:
+                Assert.response_status(response.status_code, 201)
+                created_machine = response.json()
+                created_machine_id = created_machine.get('machine_id')
+                logger.info(
+                    f'Machine created with ID: {created_machine_id} '
+                    f'assigned to area {new_area_id}',
+                )
+
+            except AssertionError:
+                logger.error('Failed to create machine for test')
+                response = areas_client.delete_area(new_area_id)
+                Assert.response_status(response.status_code, 204)
+                logger.info(f'Area {new_area_id} deleted (cleanup)')
+                pytest.fail(
+                    f'Machine creation failed, area {new_area_id} deleted',
+                )
+
+        with AllureReporting.add_step(
+            f'Try to delete area {new_area_id} assigned to machine',
+        ):
+            response = areas_client.delete_area(new_area_id)
+            AllureReporting.attach_response(
+                response.status_code,
+            )
+
+        try:
+            with AllureReporting.add_step('Verify conflict response'):
+                Assert.response_status(response.status_code, 409)
+                logger.info(
+                    'Received expected 409 conflict error - '
+                    'area assigned to machine',
+                )
+        except AssertionError:
+            logger.error(
+                f'Expected 409 conflict, got {response.status_code}',
+            )
+            pytest.fail(
+                f'Expected 409 conflict error for deleting area '
+                f'assigned to machine, got status {response.status_code}',
+            )
+
+        finally:
+            area_deleted_flag = response.status_code == 204
+
+            with AllureReporting.add_step(
+                f'Cleanup - delete created machine {created_machine_id}',
+            ):
+                response = machines_client.delete_machine(
+                    created_machine_id,
+                )
+                AllureReporting.attach_response(response.status_code)
+
+                try:
+                    Assert.response_status(response.status_code, 204)
+                    logger.info(
+                        f'Machine {created_machine_id} deleted (cleanup)',
+                    )
+
+                except AssertionError:
+                    logger.error(
+                        f'Machine {created_machine_id} deletion failed',
+                    )
+                    pytest.fail('Machine cleanup failed')
+
+            if not area_deleted_flag:
+                with AllureReporting.add_step(
+                    f'Cleanup - delete created area {new_area_id}',
+                ):
+                    response = areas_client.delete_area(new_area_id)
+                    AllureReporting.attach_response(response.status_code)
+
+                    try:
+                        Assert.response_status(response.status_code, 204)
                         logger.info(f'Area {new_area_id} deleted (cleanup)')
 
                     except AssertionError:
