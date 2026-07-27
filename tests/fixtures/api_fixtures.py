@@ -7,6 +7,7 @@ from tests.api.clients import (
     EmployeesClient,
     TasksClient,
     MachinesClient,
+    ChecklistsClient,
 )
 from tests.utils.logger import get_logger
 
@@ -66,3 +67,14 @@ def machines_client():
 
     client.close()
     logger.info('Machines client closed after test')
+
+
+@pytest.fixture(scope='session')
+def checklists_client():
+    """Checklists API client"""
+
+    client = ChecklistsClient(settings.api_url)
+    yield client
+
+    client.close()
+    logger.info('Checklists client closed after test')
