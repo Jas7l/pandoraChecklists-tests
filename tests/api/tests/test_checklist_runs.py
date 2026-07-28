@@ -17,7 +17,6 @@ def get_test_data(
         employees_client,
 ):
     test_data = {
-        # Данные из существующего run (для тестов GET)
         'run_id': None,
         'run_machine_id': None,
         'run_employee_id': None,
@@ -25,18 +24,15 @@ def get_test_data(
         'run_result_status': None,
         'run_started_at': None,
 
-        # Данные для создания нового run
         'employee_badge': None,
         'employee_id': None,
-        'checklist_id': None,          # ID скопированного чеклиста
-        'checklist_task_ids': None,    # Задачи скопированного чеклиста
+        'checklist_id': None,
+        'checklist_task_ids': None,
 
-        # Созданные тестовые данные (для cleanup)
         'created_machine_id': None,
         'area_id': None,
     }
 
-    # 1. Получаем существующий run из истории
     logger.info('Fetching first checklist run from API')
     response = checklist_runs_client.get_checklist_runs_list(limit=1, offset=0)
     Assert.response_status(response.status_code, 200)
@@ -57,7 +53,6 @@ def get_test_data(
         f'Checklist ID={test_data["run_checklist_id"]}',
     )
 
-    # 2. Получаем сотрудника для badge
     logger.info('Fetching first employee for badge')
     response = employees_client.get_employees_list(limit=1, offset=0)
     Assert.response_status(response.status_code, 200)
@@ -74,7 +69,6 @@ def get_test_data(
         f'Badge={test_data["employee_badge"]}',
     )
 
-    # 3. Получаем area для создания машины
     logger.info('Fetching area for machine creation')
     response = areas_client.get_areas_list(limit=1, offset=0, is_active=True)
     Assert.response_status(response.status_code, 200)
@@ -85,7 +79,6 @@ def get_test_data(
     test_data['area_id'] = area_id
     logger.info(f'Area loaded: ID={area_id}')
 
-    # 4. Создаём машину
     logger.info('Creating test machine')
     response = machines_client.create_machine(
         machine_name='Test Run Machine',
@@ -97,7 +90,6 @@ def get_test_data(
 
     logger.info(f'Machine created: ID={test_data["created_machine_id"]}')
 
-    # 5. Копируем существующий чеклист на новую машину
     source_checklist_id = test_data['run_checklist_id']
 
     logger.info(f'Copying checklist {source_checklist_id} to new machine')
@@ -926,7 +918,6 @@ class TestChecklistRunsAPI:
         employee_badge = test_data.get('employee_badge')
         task_ids = test_data.get('checklist_task_ids')
 
-        # Пропускаем последнюю задачу
         tasks = [
             {'task_id': task_id, 'is_ok': True}
             for task_id in task_ids[:-1]
@@ -975,12 +966,10 @@ class TestChecklistRunsAPI:
         employee_badge = test_data.get('employee_badge')
         task_ids = test_data.get('checklist_task_ids')
 
-        # Добавляем дублирующую задачу (первую задачу дважды)
         tasks = [
             {'task_id': task_id, 'is_ok': True}
             for task_id in task_ids
         ]
-        # Добавляем дубликат первой задачи
         tasks.append({'task_id': task_ids[0], 'is_ok': True})
 
         with AllureReporting.add_step(
@@ -1028,7 +1017,6 @@ class TestChecklistRunsAPI:
         employee_badge = test_data.get('employee_badge')
         task_ids = test_data.get('checklist_task_ids')
 
-        # Добавляем несуществующую задачу
         tasks = [
             {'task_id': task_id, 'is_ok': True}
             for task_id in task_ids
@@ -1077,7 +1065,6 @@ class TestChecklistRunsAPI:
         employee_badge = test_data.get('employee_badge')
         task_ids = test_data.get('checklist_task_ids')
 
-        # Первая задача без is_ok
         tasks = [
             {'task_id': task_ids[0]},
         ]
