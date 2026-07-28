@@ -25,6 +25,7 @@ class AreasClient(BaseApiClient):
             limit: int = 0,
             offset: int = 0,
             a_id: Optional[int] = None,
+            is_active: Optional[bool] = None,
     ) -> requests.Response:
         """Get paginated list of areas"""
 
@@ -34,6 +35,8 @@ class AreasClient(BaseApiClient):
         }
         if a_id is not None:
             params['id'] = a_id
+        if is_active is not None:
+            params['is_active'] = is_active
 
         return self.get('/areas', params=params)
 

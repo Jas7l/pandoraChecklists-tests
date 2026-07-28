@@ -130,9 +130,6 @@ class TestChecklistsAPI:
             logger.info(
                 f'Machine {data["created_machine_id_2"]} deleted (cleanup)',
             )
-        if data.get('area_id'):
-            areas_client.delete_area(data['area_id'])
-            logger.info(f'Area {data["area_id"]} deleted (cleanup)')
 
     @allure.story('Get checklists list')
     @allure.severity(allure.severity_level.CRITICAL)
@@ -1556,12 +1553,7 @@ class TestChecklistsAPI:
             with AllureReporting.add_step('Verify old checklist status'):
                 Assert.response_status(response.status_code, 200)
 
-                old_checklist = response.json()[0]
-                Assert.equal(
-                    old_checklist.get('checklist_id'),
-                    created_checklist_id,
-                )
-                Assert.equal(old_checklist.get('status'), False)
+                Assert.is_empty(response.json())
 
                 logger.info(
                     f'Old checklist {created_checklist_id} deactivated',

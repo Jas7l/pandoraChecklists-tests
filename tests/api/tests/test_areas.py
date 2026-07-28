@@ -45,7 +45,6 @@ def get_test_data(areas_client):
 class TestAreasAPI:
     """Test suite for Areas API endpoints"""
 
-    TEST_NAME = 'test area'
     TEST_MACHINE_NAME = 'test machine'
     TEST_BADGE = 12345678
     TEST_INVALID_ID = 9999999
@@ -249,16 +248,16 @@ class TestAreasAPI:
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title('API-TC-005: Create new area')
     @pytest.mark.positive
-    def test_create_area(self, areas_client):
+    def test_create_area(self, areas_client, unique_area_name):
 
         logger.info(
-            f'>>> TEST: Create new area with name="{self.TEST_NAME}"',
+            f'>>> TEST: Create new area with name="{unique_area_name}"',
         )
 
         with AllureReporting.add_step(
-            f'Create area with name="{self.TEST_NAME}"',
+            f'Create area with name="{unique_area_name}"',
         ):
-            response = areas_client.create_area(self.TEST_NAME)
+            response = areas_client.create_area(unique_area_name)
             AllureReporting.attach_response(
                 response.status_code,
                 response.json(),
@@ -271,18 +270,18 @@ class TestAreasAPI:
                 area = response.json()
 
                 Assert.has_key(area, 'area_id')
-                Assert.equal(area.get('area_name'), self.TEST_NAME)
+                Assert.equal(area.get('area_name'), unique_area_name)
                 area_id = area.get('area_id')
 
                 logger.info(
                     f'Area created with ID: {area_id}, '
-                    f'Name: {self.TEST_NAME}',
+                    f'Name: {unique_area_name}',
                 )
 
         except AssertionError:
             logger.error('Failed to create area')
             pytest.fail(
-                f'Area creation failed for name="{self.TEST_NAME}"',
+                f'Area creation failed for name="{unique_area_name}"',
             )
 
         finally:
@@ -402,14 +401,14 @@ class TestAreasAPI:
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title('API-TC-008: Delete existing area')
     @pytest.mark.positive
-    def test_delete_area(self, areas_client):
+    def test_delete_area(self, areas_client, unique_area_name):
 
         logger.info('>>> TEST: Delete existing area')
 
         with AllureReporting.add_step(
-            f'Create area for deletion with name="{self.TEST_NAME}"',
+            f'Create area for deletion with name="{unique_area_name}"',
         ):
-            response = areas_client.create_area(self.TEST_NAME)
+            response = areas_client.create_area(unique_area_name)
             AllureReporting.attach_response(
                 response.status_code,
                 response.json(),
@@ -487,20 +486,20 @@ class TestAreasAPI:
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title('API-TC-010: Patch area name')
     @pytest.mark.positive
-    def test_patch_area(self, areas_client, test_data):
+    def test_patch_area(self, areas_client, test_data, unique_area_name):
 
         area_id = test_data.get('area_id')
         original_name = test_data.get('area_name')
 
         logger.info(
             f'>>> TEST: Patch area ID={area_id} name to '
-            f'"{self.TEST_NAME}"',
+            f'"{unique_area_name}"',
         )
 
         with AllureReporting.add_step(
-            f'Patch area name to "{self.TEST_NAME}"',
+            f'Patch area name to "{unique_area_name}"',
         ):
-            response = areas_client.patch_area(area_id, self.TEST_NAME)
+            response = areas_client.patch_area(area_id, unique_area_name)
             AllureReporting.attach_response(
                 response.status_code,
                 response.json(),
@@ -513,9 +512,9 @@ class TestAreasAPI:
                 area = response.json()
 
                 Assert.equal(area.get('area_id'), area_id)
-                Assert.equal(area.get('area_name'), self.TEST_NAME)
+                Assert.equal(area.get('area_name'), unique_area_name)
 
-                logger.info(f'Area name updated to: {self.TEST_NAME}')
+                logger.info(f'Area name updated to: {unique_area_name}')
 
             except AssertionError:
                 logger.error(f'Area {area_id} patch failed')
@@ -556,7 +555,9 @@ class TestAreasAPI:
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.title('API-TC-011: Patch area with duplicate name')
     @pytest.mark.negative
-    def test_patch_area_duplicate_name(self, areas_client, test_data):
+    def test_patch_area_duplicate_name(
+            self, areas_client, test_data, unique_area_name,
+    ):
 
         existing_name = test_data.get('area_name')
         logger.info(
@@ -565,9 +566,9 @@ class TestAreasAPI:
         )
 
         with AllureReporting.add_step(
-            f'Create area for patch test with name="{self.TEST_NAME}"',
+            f'Create area for patch test with name="{unique_area_name}"',
         ):
-            response = areas_client.create_area(self.TEST_NAME)
+            response = areas_client.create_area(unique_area_name)
             AllureReporting.attach_response(
                 response.status_code,
                 response.json(),
@@ -626,7 +627,7 @@ class TestAreasAPI:
     @allure.title('API-TC-012: Delete area that is assigned to machine')
     @pytest.mark.positive
     def test_delete_area_assigned_to_machine(
-            self, areas_client, machines_client, test_data,
+            self, areas_client, machines_client, test_data, unique_area_name,
     ):
 
         logger.info('>>> TEST: Delete area assigned to machine')
@@ -636,15 +637,15 @@ class TestAreasAPI:
         delete_status = None
 
         with AllureReporting.add_step(
-            f'Create area "{self.TEST_NAME}" and assign to machine',
+            f'Create area "{unique_area_name}" and assign to machine',
         ):
-            response = areas_client.create_area(self.TEST_NAME)
+            response = areas_client.create_area(unique_area_name)
             try:
                 Assert.response_status(response.status_code, 201)
             except AssertionError:
                 logger.error('Failed to create area for test')
                 pytest.fail(
-                    f'Area creation failed for name="{self.TEST_NAME}"',
+                    f'Area creation failed for name="{unique_area_name}"',
                 )
 
             new_area = response.json()
@@ -756,5 +757,49 @@ class TestAreasAPI:
                     except AssertionError:
                         logger.error(f'Area {new_area_id} deletion failed')
                         pytest.fail('Area cleanup failed')
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Get areas list')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-013: Get areas by is_active filter')
+    @pytest.mark.parametrize('is_active', [True, False])
+    @pytest.mark.positive
+    def test_get_areas_by_is_active(self, areas_client, is_active):
+
+        logger.info(
+            f'>>> TEST: Get areas by is_active={is_active}',
+        )
+
+        with AllureReporting.add_step(
+            f'Get areas by is_active={is_active}',
+        ):
+            response = areas_client.get_areas_list(is_active=is_active)
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify areas by is_active'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                areas = response.json()
+
+                for area in areas:
+                    Assert.equal(area.get('is_active'), is_active)
+
+                logger.info(
+                    f'Found {len(areas)} areas with is_active={is_active}',
+                )
+
+            except AssertionError:
+                logger.error(
+                    f'Expected areas with is_active={is_active}',
+                )
+                pytest.fail(
+                    f'Expected areas with is_active={is_active}, '
+                    f'got empty or invalid response',
+                )
 
         logger.info('<<< TEST PASSED')

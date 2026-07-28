@@ -1,4 +1,6 @@
 import pytest
+import uuid
+from datetime import datetime
 
 from tests.config.settings import settings
 from tests.api.clients import (
@@ -8,6 +10,7 @@ from tests.api.clients import (
     TasksClient,
     MachinesClient,
     ChecklistsClient,
+    ChecklistRunsClient,
 )
 from tests.utils.logger import get_logger
 
@@ -78,3 +81,22 @@ def checklists_client():
 
     client.close()
     logger.info('Checklists client closed after test')
+
+
+@pytest.fixture(scope='session')
+def checklist_runs_client():
+    """Checklist runs API client"""
+
+    client = ChecklistRunsClient(settings.api_url)
+    yield client
+
+    client.close()
+    logger.info('Checklist runs client closed after test')
+
+
+@pytest.fixture
+def unique_area_name():
+    """Generate unique area name for tests."""
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    short_uuid = uuid.uuid4().hex[:6]
+    return f'test_area_{timestamp}_{short_uuid}'
