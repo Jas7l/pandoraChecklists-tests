@@ -60,3 +60,23 @@ class AreasClient(BaseApiClient):
         payload = {'area_name': name}
 
         return self.patch(f'/areas/{a_id}', json=payload)
+
+    def search_areas(
+            self,
+            q: str,
+            is_active: Optional[bool] = None,
+            limit: int = 0,
+            offset: int = 0,
+    ) -> requests.Response:
+        """Full-text search for areas by name"""
+
+        params = {
+            'q': q,
+            'limit': limit,
+            'offset': offset,
+        }
+
+        if is_active is not None:
+            params['is_active'] = is_active
+
+        return self.get('/areas/search', params=params)

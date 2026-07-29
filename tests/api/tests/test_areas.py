@@ -803,3 +803,491 @@ class TestAreasAPI:
                 )
 
         logger.info('<<< TEST PASSED')
+
+    @allure.story('Search areas')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-014: Search areas by partial name')
+    @pytest.mark.positive
+    def test_search_areas_partial_name(self, areas_client, test_data):
+
+        search_query = test_data.get('area_name')[:3]
+        logger.info(
+            f'>>> TEST: Search areas by partial name="{search_query}"',
+        )
+
+        with AllureReporting.add_step(
+            f'Search areas by partial name="{search_query}"',
+        ):
+            response = areas_client.search_areas(q=search_query)
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify partial name search results'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                areas = response.json()
+                Assert.is_not_empty(areas)
+
+                found_test_area = any(
+                    test_data.get('area_name').lower() in area.get(
+                        'area_name').lower()
+                    for area in areas
+                )
+                Assert.is_true(found_test_area)
+
+                logger.info(
+                    f'Found {len(areas)} areas matching partial name '
+                    f'"{search_query}"',
+                )
+
+            except AssertionError:
+                logger.error(
+                    f'Partial name search failed for "{search_query}"',
+                )
+                pytest.fail(
+                    f'Expected search results for partial name='
+                    f'"{search_query}"',
+                )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search areas')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-015: Search areas with OR operator')
+    @pytest.mark.positive
+    def test_search_areas_with_or_operator(
+            self, areas_client, test_data, unique_area_name,
+    ):
+
+        logger.info('>>> TEST: Search areas with OR operator')
+
+        created_area_id = None
+
+        with AllureReporting.add_step(
+            f'Create area "{unique_area_name}" for OR test',
+        ):
+            response = areas_client.create_area(unique_area_name)
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+            try:
+                Assert.response_status(response.status_code, 201)
+                area = response.json()
+                created_area_id = area.get('area_id')
+                logger.info(f'Area created with ID: {created_area_id}')
+
+            except AssertionError:
+                logger.error('Failed to create area for OR test')
+                pytest.fail('Area creation failed for OR test')
+
+        try:
+            search_query = (
+                f'{test_data.get("area_name")} OR {unique_area_name}'
+            )
+            logger.info(f'Search query with OR: "{search_query}"')
+
+            with AllureReporting.add_step(
+                f'Search areas with OR="{search_query}"',
+            ):
+                response = areas_client.search_areas(q=search_query)
+                AllureReporting.attach_response(
+                    response.status_code,
+                    response.json(),
+                )
+
+            with AllureReporting.add_step('Verify OR operator works'):
+                try:
+                    Assert.response_status(response.status_code, 200)
+
+                    areas = response.json()
+                    Assert.is_not_empty(areas)
+
+                    found_original = any(
+                        test_data.get('area_name').lower() in area.get(
+                            'area_name').lower()
+                        for area in areas
+                    )
+                    found_new = any(
+                        unique_area_name.lower() in area.get(
+                            'area_name').lower()
+                        for area in areas
+                    )
+
+                    Assert.is_true(found_original)
+                    Assert.is_true(found_new)
+
+                    logger.info(
+                        'OR operator works: found both '
+                        f'"{test_data.get("area_name")}" '
+                        f'and "{unique_area_name}"',
+                    )
+
+                except AssertionError:
+                    logger.error(
+                        f'Search with OR failed for query="{search_query}"',
+                    )
+                    pytest.fail(
+                        'Expected to find both areas with OR operator',
+                    )
+
+        finally:
+            with AllureReporting.add_step(
+                f'Cleanup - delete area {created_area_id}',
+            ):
+                response = areas_client.delete_area(created_area_id)
+                AllureReporting.attach_response(response.status_code)
+
+                try:
+                    Assert.response_status(response.status_code, 204)
+                    logger.info(f'Area {created_area_id} deleted (cleanup)')
+
+                except AssertionError:
+                    logger.error(f'Area {created_area_id} deletion failed')
+                    pytest.fail('Area cleanup failed')
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search areas')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-016: Search areas with exclusion operator')
+    @pytest.mark.positive
+    def test_search_areas_with_exclusion(self, areas_client, test_data):
+
+        search_query = f'-"{test_data.get("area_name")}"'
+        logger.info(
+            f'>>> TEST: Search areas with exclusion="{search_query}"',
+        )
+
+        with AllureReporting.add_step(
+            f'Search areas with exclusion="{search_query}"',
+        ):
+            response = areas_client.search_areas(q=search_query)
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify exclusion works'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                areas = response.json()
+
+                if areas:
+                    for area in areas:
+                        Assert.not_contains(
+                            area.get('area_name').lower(),
+                            test_data.get('area_name').lower(),
+                        )
+                    logger.info(
+                        f'Found {len(areas)} areas without excluded name',
+                    )
+                else:
+                    logger.info(
+                        'Empty result - all areas contain excluded name',
+                    )
+
+            except AssertionError:
+                logger.error(f'Exclusion failed for "{search_query}"')
+                pytest.fail(
+                    f'Expected results without '
+                    f'"{test_data.get("area_name")}"',
+                )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search areas')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-017: Search deleted area with is_active filter')
+    @pytest.mark.positive
+    def test_search_deleted_area_is_active_filter(
+            self, areas_client, unique_area_name,
+    ):
+
+        logger.info('>>> TEST: Search deleted area with is_active filter')
+
+        created_area_id = None
+        area_name = unique_area_name
+
+        with AllureReporting.add_step(
+            f'Create area "{area_name}" for deletion test',
+        ):
+            response = areas_client.create_area(area_name)
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+            try:
+                Assert.response_status(response.status_code, 201)
+                area = response.json()
+                created_area_id = area.get('area_id')
+                logger.info(f'Area created with ID: {created_area_id}')
+
+            except AssertionError:
+                logger.error('Failed to create area for deletion test')
+                pytest.fail('Area creation failed')
+
+        with AllureReporting.add_step(f'Delete area {created_area_id}'):
+            response = areas_client.delete_area(created_area_id)
+            AllureReporting.attach_response(response.status_code)
+
+            try:
+                Assert.response_status(response.status_code, 204)
+                logger.info(f'Area {created_area_id} deleted')
+
+            except AssertionError:
+                logger.error(f'Area {created_area_id} deletion failed')
+                pytest.fail('Area deletion failed')
+
+        with AllureReporting.add_step(
+            f'Search deleted area with is_active=False',
+        ):
+            response = areas_client.search_areas(
+                q=area_name,
+                is_active=False,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step(
+            'Verify deleted area found with is_active=False',
+        ):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                areas = response.json()
+                Assert.is_not_empty(areas)
+
+                found_deleted = any(
+                    area_name.lower() in area.get('area_name').lower()
+                    for area in areas
+                )
+                Assert.is_true(found_deleted)
+
+                for area in areas:
+                    Assert.equal(area.get('is_active'), False)
+
+                logger.info('Deleted area found with is_active=False')
+
+            except AssertionError:
+                logger.error('Deleted area not found with is_active=False')
+                pytest.fail(
+                    'Expected to find deleted area with is_active=False',
+                )
+
+        with AllureReporting.add_step(
+            f'Search deleted area with is_active=True',
+        ):
+            response = areas_client.search_areas(
+                q=area_name,
+                is_active=True,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step(
+            'Verify deleted area not found with is_active=True',
+        ):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                areas = response.json()
+
+                found_deleted = any(
+                    area_name.lower() in area.get('area_name').lower()
+                    for area in areas
+                )
+                Assert.is_false(found_deleted)
+
+                logger.info('Deleted area not found with is_active=True')
+
+            except AssertionError:
+                logger.error('Deleted area found with is_active=True')
+                pytest.fail(
+                    'Expected not to find deleted area with is_active=True',
+                )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search areas')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-018: Search areas with limit parameter')
+    @pytest.mark.positive
+    def test_search_areas_with_limit(self, areas_client):
+
+        search_query = 'Цех'
+        limit = 1
+
+        logger.info(
+            f'>>> TEST: Search areas with query="{search_query}", '
+            f'limit={limit}',
+        )
+
+        with AllureReporting.add_step(
+            f'Search areas with query="{search_query}", limit={limit}',
+        ):
+            response = areas_client.search_areas(
+                q=search_query,
+                limit=limit,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify limit works'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                areas = response.json()
+                Assert.less_than(len(areas), limit + 1)
+
+                logger.info(
+                    f'Found {len(areas)} areas with limit={limit}',
+                )
+
+            except AssertionError:
+                logger.error(f'Limit parameter failed')
+                pytest.fail(
+                    f'Expected at most {limit} result(s), '
+                    f'got {len(response.json())}',
+                )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search areas')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-019: Search areas with empty query')
+    @pytest.mark.negative
+    def test_search_areas_empty_query(self, areas_client):
+
+        logger.info('>>> TEST: Search areas with empty query')
+
+        with AllureReporting.add_step('Search areas with empty query'):
+            response = areas_client.search_areas(q='')
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify error response'):
+            try:
+                Assert.response_status(response.status_code, 400)
+                logger.info('Received expected 400 error for empty query')
+
+            except AssertionError:
+                logger.error(
+                    f'Expected 400 error, got {response.status_code}',
+                )
+                pytest.fail(
+                    f'Expected 400 error for empty query, '
+                    f'got status {response.status_code}',
+                )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search areas')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-020: Search areas with non-existent query')
+    @pytest.mark.negative
+    def test_search_areas_no_results(self, areas_client):
+
+        search_query = 'nonexistent_area_xyz_12345'
+        logger.info(
+            f'>>> TEST: Search areas with non-existent query='
+            f'"{search_query}"',
+        )
+
+        with AllureReporting.add_step(
+            f'Search areas with query="{search_query}"',
+        ):
+            response = areas_client.search_areas(q=search_query)
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify empty search results'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                areas = response.json()
+                Assert.is_empty(areas)
+
+                logger.info('Received empty response for non-existent query')
+
+            except AssertionError:
+                logger.error(
+                    f'Expected empty response for query="{search_query}"',
+                )
+                pytest.fail(
+                    'Expected empty response for non-existent query',
+                )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search areas')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-021: Search areas with special characters')
+    @pytest.mark.negative
+    def test_search_areas_special_characters(self, areas_client):
+
+        special_queries = [
+            '!@#$%^&*()',
+            'test_123!@#',
+            '~~~```',
+            '|||///\\\\',
+            'ц?е*х',
+        ]
+
+        logger.info('>>> TEST: Search areas with special characters')
+
+        for query in special_queries:
+            logger.info(f'Search with query="{query}"')
+
+            with AllureReporting.add_step(
+                f'Search areas with query="{query}"',
+            ):
+                response = areas_client.search_areas(q=query)
+                AllureReporting.attach_response(
+                    response.status_code,
+                    response.json(),
+                )
+
+            with AllureReporting.add_step(
+                f'Verify response for query="{query}"',
+            ):
+                try:
+                    if response.status_code == 200:
+                        areas = response.json()
+                        Assert.is_empty(areas)
+                        logger.info(f'Query "{query}" returned empty results')
+                    elif response.status_code == 400:
+                        logger.info(
+                            f'Query "{query}" returned expected 400 error',
+                        )
+                    else:
+                        Assert.response_status(response.status_code, 200)
+                        Assert.response_status(response.status_code, 400)
+
+                except AssertionError:
+                    logger.error(
+                        f'Unexpected response for query="{query}"',
+                    )
+                    pytest.fail(
+                        f'Expected 200 with empty array or 400 error for '
+                        f'special characters query="{query}", '
+                        f'got {response.status_code}',
+                    )
+
+        logger.info('<<< TEST PASSED')
