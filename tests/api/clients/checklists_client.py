@@ -114,3 +114,22 @@ class ChecklistsClient(BaseApiClient):
         """Remove task from checklist by id"""
 
         return self.delete(f'/checklists/{checklist_id}/tasks/{task_id}')
+
+    def search_checklists(
+            self,
+            q: str,
+            status: Optional[bool] = None,
+            limit: int = 20,
+            offset: int = 0,
+    ) -> requests.Response:
+        """Search checklists by name substring"""
+
+        params = {
+            'q': q,
+            'limit': limit,
+            'offset': offset,
+        }
+        if status is not None:
+            params['status'] = status
+
+        return self.get('/checklists/search', params=params)

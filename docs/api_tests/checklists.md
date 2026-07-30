@@ -21,6 +21,9 @@
 | Получение чек-листа по ID (`GET /checklists?checklist_id=`) | |
 | Получение чек-листов по machine_id (`GET /checklists?machine_id=`) | |
 | Получение чек-листов по status (`GET /checklists?status=`) | |
+| Поиск чек-листов по названию (`GET /checklists/search?q=`) | |
+| Поиск с пагинацией (`limit`, `offset`) | |
+| Поиск по статусу (`status=true/false`) | |
 | Обновление чек-листа (`PATCH /checklists/{id}`) | |
 | Удаление чек-листа (`DELETE /checklists/{id}`) | |
 | Копирование чек-листа (`POST /checklists/copy`) | |
@@ -38,7 +41,7 @@
 
 - **Источник истины — HTTP-статус.** В JSON нет полей `response_code` / `error_code`.
 - **Тело ответа:** успех с данными → `200` + массив объектов; создание → `201` + объект; удаление → `204` без тела.
-- **Пагинация:** параметры `limit` (дефолт 0, макс 500) и `offset` (дефолт 0).
+- **Пагинация:** параметры `limit` (дефолт 0, макс 50) и `offset` (дефолт 0).
 
 ## 3. Endpoint-ы — Checklists
 
@@ -49,12 +52,13 @@
 | API-03 | `GET` | `/api/v1/checklists?checklist_id=` | Получить чек-лист по ID | `High` | `Pass` |
 | API-04 | `GET` | `/api/v1/checklists?machine_id=` | Получить чек-листы по станку | `High` | `Pass` |
 | API-05 | `GET` | `/api/v1/checklists?status=` | Получить чек-листы по статусу | `High` | `Pass` |
-| API-06 | `POST` | `/api/v1/checklists` | Создать чек-лист | `High` | `Pass` |
-| API-07 | `POST` | `/api/v1/checklists/copy` | Копировать чек-лист | `High` | `Pass` |
-| API-08 | `POST` | `/api/v1/checklists/{id}/tasks` | Добавить задачу в чек-лист | `High` | `Pass` |
-| API-09 | `PATCH` | `/api/v1/checklists/{id}` | Обновить чек-лист (частично) | `Medium` | `Pass` |
-| API-10 | `DELETE` | `/api/v1/checklists/{id}` | Удалить чек-лист | `High` | `Pass` |
-| API-11 | `DELETE` | `/api/v1/checklists/{id}/tasks/{task_id}` | Удалить задачу из чек-листа | `High` | `Pass` |
+| API-06 | `GET` | `/api/v1/checklists/search?q=` | Поиск чек-листов по названию | `High` | `Pass` |
+| API-07 | `POST` | `/api/v1/checklists` | Создать чек-лист | `High` | `Pass` |
+| API-08 | `POST` | `/api/v1/checklists/copy` | Копировать чек-лист | `High` | `Pass` |
+| API-09 | `POST` | `/api/v1/checklists/{id}/tasks` | Добавить задачу в чек-лист | `High` | `Pass` |
+| API-10 | `PATCH` | `/api/v1/checklists/{id}` | Обновить чек-лист (частично) | `Medium` | `Pass` |
+| API-11 | `DELETE` | `/api/v1/checklists/{id}` | Удалить чек-лист | `High` | `Pass` |
+| API-12 | `DELETE` | `/api/v1/checklists/{id}/tasks/{task_id}` | Удалить задачу из чек-листа | `High` | `Pass` |
 
 ## 4. Предусловия и данные — Checklists
 
@@ -71,7 +75,7 @@
 | Название | Значение | Где используется | Примечание |
 |----------|----------|------------------|------------|
 | Checklist ID (существующий) | Динамически из API | TC-003, TC-016, TC-017, TC-018, TC-019, TC-020, TC-021, TC-022, TC-024 | Получается через GET /checklists |
-| Checklist Name (существующий) | Динамически из API | TC-003, TC-016 | Получается из первого чек-листа |
+| Checklist Name (существующий) | Динамически из API | TC-003, TC-016, TC-031, TC-032, TC-033, TC-037 | Получается из первого чек-листа |
 | Machine ID (существующий) | Динамически из API | TC-003, TC-005, TC-021 | Получается из первого чек-листа |
 | Task IDs (существующие) | Динамически из API | TC-003, TC-008, TC-009, TC-014, TC-018, TC-019, TC-020, TC-026 | Получается из первого чек-листа |
 | Status (существующий) | Динамически из API | TC-003, TC-017 | Получается из первого чек-листа |
@@ -83,6 +87,7 @@
 | Machine ID (несуществующий) | `9999999` | TC-006, TC-009, TC-021, TC-024 | Не существует в БД |
 | Task ID (несуществующий) | `9999999` | TC-010, TC-020, TC-028, TC-030 | Не существует в БД |
 | Name (для создания) | `Test Checklist` | TC-008, TC-012, TC-013, TC-014, TC-016, TC-025, TC-026, TC-027, TC-028, TC-029, TC-030 | Название для создания/обновления |
+| Name (для поиска) | `Test Checklist_inactive` | TC-033 | Название для поиска неактивных |
 | Limit | `10` | TC-002 | Лимит для пагинации |
 | Offset | `1` | TC-002 | Смещение для пагинации |
 
@@ -120,6 +125,13 @@
 | TC-028 | `POST /checklists/{id}/tasks` | Добавление несуществующей задачи | `Negative` | POST с `task_id: 9999999` | Должен быть `409` + ошибка валидации | Совпадает с ожидаемым | `Pass` | |
 | TC-029 | `DELETE /checklists/{id}/tasks/{task_id}` | Удаление задачи из чек-листа | `Positive` | 1. Создать чек-лист с задачей <br/> 2. DELETE по `task_id` | `204 No Content`; задача удалена из чек-листа | Совпадает с ожидаемым | `Pass` | |
 | TC-030 | `DELETE /checklists/{id}/tasks/{task_id}` | Удаление несуществующей задачи | `Negative` | DELETE с `task_id: 9999999` | `404` + ошибка `not found` | Совпадает с ожидаемым | `Pass` | |
+| TC-031 | `GET /checklists/search?q=` | Поиск чек-листов по подстроке | `Positive` | GET с `q` = первые 5 символов существующего чек-листа | `200` + массив объектов; все результаты содержат подстроку; сортировка: сначала начинающиеся с `q` | Совпадает с ожидаемым | `Pass` | |
+| TC-032 | `GET /checklists/search?q=` | Поиск с пагинацией | `Positive` | GET с `limit=1&offset=0`, затем `limit=1&offset=1` | `200` + массив объектов; страницы содержат разные чек-листы | Совпадает с ожидаемым | `Pass` | |
+| TC-033 | `GET /checklists/search?q=` | Поиск неактивных чек-листов | `Positive` | 1. Создать чек-лист <br/> 2. Деактивировать его <br/> 3. GET с `status=false` | `200` + массив с неактивным чек-листом; GET с `status=true` не возвращает его | Совпадает с ожидаемым | `Pass` | |
+| TC-034 | `GET /checklists/search?q=` | Поиск с q короче 2 символов | `Negative` | GET с `q="a"` | Должен быть `400` + ошибка `query too short` | Совпадает с ожидаемым | `Pass` | |
+| TC-035 | `GET /checklists/search?q=` | Поиск с пустым q | `Negative` | GET с `q=""` | Должен быть `400` + ошибка `query is required` | Совпадает с ожидаемым | `Pass` | |
+| TC-036 | `GET /checklists/search?q=` | Поиск с несуществующей подстрокой | `Positive` | GET с `q="nonexistent_xyz_123"` | `200` + пустой массив `[]` | Совпадает с ожидаемым | `Pass` | |
+| TC-037 | `GET /checklists/search?q=` | Поиск с limit превышающим максимум | `Positive` | GET с `q=<substring>&limit=100` | `200` + массив объектов; количество ≤ 50 (максимальный лимит) | Совпадает с ожидаемым | `Pass` | |
 
 ## 6. Дефекты — Checklists
 
@@ -131,5 +143,5 @@
 
 | Статус | Количество |
 |--------|------------|
-| Pass | 30 |
+| Pass | 37 |
 | Fail | 0 |

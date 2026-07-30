@@ -1979,3 +1979,455 @@ class TestChecklistsAPI:
                     logger.info(f'Checklist {checklist_id} deleted (cleanup)')
 
         logger.info('<<< TEST PASSED')
+
+    @allure.story('Search checklists')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-031: Search checklists by substring')
+    @pytest.mark.positive
+    def test_search_checklists_by_substring(
+            self, checklists_client, test_data,
+    ):
+
+        checklist_name = test_data.get('checklist_name')
+        search_substring = checklist_name[:5]
+
+        logger.info(
+            f'>>> TEST: Search checklists by substring "{search_substring}"',
+        )
+
+        with AllureReporting.add_step(
+            f'Search checklists with q="{search_substring}"',
+        ):
+            response = checklists_client.search_checklists(q=search_substring)
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify search results'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                checklists = response.json()
+                Assert.is_not_empty(checklists)
+
+                found_checklist = any(
+                    checklist_name.lower() in checklist.get(
+                        'checklist_name').lower()
+                    for checklist in checklists
+                )
+
+                Assert.is_true(found_checklist)
+                logger.info(
+                    f'Checklist "{checklist_name}" found in search results',
+                )
+
+                q_lower = search_substring.lower()
+                starts_with_q = []
+                contains_q = []
+
+                for checklist in checklists:
+                    checklist_name_lower = checklist.get(
+                        'checklist_name').lower()
+                    if checklist_name_lower.startswith(q_lower):
+                        starts_with_q.append(checklist_name_lower)
+                    elif q_lower in checklist_name_lower:
+                        contains_q.append(checklist_name_lower)
+
+                for checklist in checklists:
+                    Assert.is_true(
+                        search_substring.lower() in checklist.get(
+                            'checklist_name').lower(),
+                    )
+
+                logger.info(
+                    f'Search results: total={len(checklists)}, '
+                    f'starts_with_q={len(starts_with_q)}, '
+                    f'contains_q={len(contains_q)}',
+                )
+
+            except AssertionError:
+                logger.error(
+                    f'Search failed for query="{search_substring}"',
+                )
+                pytest.fail(
+                    f'Expected to find checklist "{checklist_name}" '
+                    f'in search results',
+                )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search checklists')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-032: Search checklists with pagination')
+    @pytest.mark.positive
+    def test_search_checklists_pagination(self, checklists_client, test_data):
+
+        checklist_name = test_data.get('checklist_name')
+        search_substring = checklist_name[:5]
+
+        logger.info(
+            f'>>> TEST: Search checklists with pagination, '
+            f'q="{search_substring}"',
+        )
+
+        with AllureReporting.add_step(
+            'Search with limit=1, offset=0',
+        ):
+            response = checklists_client.search_checklists(
+                q=search_substring,
+                limit=1,
+                offset=0,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify first page'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                checklists_page1 = response.json()
+                Assert.is_not_empty(checklists_page1)
+                Assert.less_than(len(checklists_page1), 2)
+
+                logger.info(
+                    f'First page: {len(checklists_page1)} checklists',
+                )
+
+            except AssertionError:
+                logger.error('Failed to get first page')
+                pytest.fail('Pagination first page failed')
+
+        with AllureReporting.add_step(
+            'Search with limit=1, offset=1',
+        ):
+            response = checklists_client.search_checklists(
+                q=search_substring,
+                limit=1,
+                offset=1,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify second page'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                checklists_page2 = response.json()
+
+                if len(checklists_page1) > 0 and len(checklists_page2) > 0:
+                    Assert.not_equal(
+                        checklists_page1[0].get('checklist_id'),
+                        checklists_page2[0].get('checklist_id'),
+                    )
+                    logger.info(
+                        'Pagination works: different checklists on pages',
+                    )
+
+            except AssertionError:
+                logger.error('Pagination verification failed')
+                pytest.fail('Pagination pages are identical')
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search checklists')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-033: Search checklists with status=false')
+    @pytest.mark.positive
+    def test_search_checklists_inactive(self, checklists_client, test_data):
+
+        checklist_name = test_data.get('checklist_name')
+        search_substring = checklist_name[:5]
+        created_checklist_id = None
+
+        logger.info(
+            f'>>> TEST: Search inactive checklists with q='
+            f'"{search_substring}"',
+        )
+
+        with AllureReporting.add_step(
+            f'Create checklist "{self.TEST_NAME}_inactive" for test',
+        ):
+            response = checklists_client.create_checklist(
+                checklist_name=f'{self.TEST_NAME}_inactive',
+                machine_id=test_data.get('created_machine_id_1'),
+                task_id=[test_data.get('new_task_id')],
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        try:
+            Assert.response_status(response.status_code, 201)
+            checklist = response.json()
+            created_checklist_id = checklist.get('checklist_id')
+            logger.info(
+                f'Checklist created: {created_checklist_id}',
+            )
+
+        except AssertionError:
+            logger.error('Failed to create checklist for test')
+            pytest.fail('Checklist creation failed')
+
+        with AllureReporting.add_step(
+            f'Deactivate checklist {created_checklist_id}',
+        ):
+            response = checklists_client.patch_checklist(
+                checklist_id=created_checklist_id,
+                status=False,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        try:
+            Assert.response_status(response.status_code, 200)
+            logger.info(f'Checklist {created_checklist_id} deactivated')
+        except AssertionError:
+            logger.error('Failed to deactivate checklist')
+            pytest.fail('Checklist deactivation failed')
+
+        with AllureReporting.add_step(
+            'Search inactive checklists with status=false',
+        ):
+            response = checklists_client.search_checklists(
+                q=self.TEST_NAME,
+                status=False,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify inactive checklist found'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                checklists = response.json()
+                Assert.is_not_empty(checklists)
+
+                found_inactive = any(
+                    self.TEST_NAME.lower() in checklist.get(
+                        'checklist_name').lower()
+                    for checklist in checklists
+                )
+
+                Assert.is_true(found_inactive)
+                logger.info('Inactive checklist found in search results')
+
+                for checklist in checklists:
+                    Assert.equal(checklist.get('status'), False)
+
+            except AssertionError:
+                logger.error('Inactive checklist not found')
+                pytest.fail('Expected to find inactive checklist')
+
+        with AllureReporting.add_step(
+            'Search active checklists with status=true',
+        ):
+            response = checklists_client.search_checklists(
+                q=self.TEST_NAME,
+                status=True,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step(
+            'Verify inactive checklist not in active',
+        ):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                checklists = response.json()
+
+                found_inactive_active = any(
+                    self.TEST_NAME.lower() in checklist.get(
+                        'checklist_name').lower()
+                    for checklist in checklists
+                )
+
+                Assert.is_false(found_inactive_active)
+                logger.info('Inactive checklist not found in active search')
+
+                for checklist in checklists:
+                    Assert.equal(checklist.get('status'), True)
+
+            except AssertionError:
+                logger.error('Inactive checklist found in active search')
+                pytest.fail(
+                    'Inactive checklist should not be in active search',
+                )
+
+            finally:
+                if created_checklist_id:
+                    with AllureReporting.add_step(
+                        f'Cleanup - delete checklist '
+                        f'{created_checklist_id}',
+                    ):
+                        response = checklists_client.delete_checklist(
+                            created_checklist_id,
+                        )
+                        AllureReporting.attach_response(response.status_code)
+
+                        Assert.response_status(response.status_code, 204)
+                        logger.info(
+                            f'Checklist {created_checklist_id} deleted '
+                            f'(cleanup)',
+                        )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search checklists')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-034: Search checklists with q shorter than 2 chars')
+    @pytest.mark.negative
+    def test_search_checklists_q_too_short(self, checklists_client):
+
+        logger.info('>>> TEST: Search checklists with q="a" (too short)')
+
+        with AllureReporting.add_step('Search with q="a"'):
+            response = checklists_client.search_checklists(q='a')
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify 400 error'):
+            try:
+                Assert.response_status(response.status_code, 400)
+                logger.info('Received expected 400 error for q too short')
+            except AssertionError:
+                logger.error(
+                    f'Expected 400 error, got {response.status_code}',
+                )
+                pytest.fail(
+                    f'Expected 400 error for q too short, '
+                    f'got status {response.status_code}',
+                )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search checklists')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-035: Search checklists with empty q')
+    @pytest.mark.negative
+    def test_search_checklists_q_empty(self, checklists_client):
+
+        logger.info('>>> TEST: Search checklists with q=""')
+
+        with AllureReporting.add_step('Search with q=""'):
+            response = checklists_client.search_checklists(q='')
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify 400 error'):
+            try:
+                Assert.response_status(response.status_code, 400)
+                logger.info('Received expected 400 error for q empty')
+            except AssertionError:
+                logger.error(
+                    f'Expected 400 error, got {response.status_code}',
+                )
+                pytest.fail(
+                    f'Expected 400 error for q empty, '
+                    f'got status {response.status_code}',
+                )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search checklists')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-036: Search checklists with non-existent substring')
+    @pytest.mark.positive
+    def test_search_checklists_no_results(self, checklists_client):
+
+        non_existent_query = 'nonexistent_xyz_123'
+
+        logger.info(
+            f'>>> TEST: Search checklists with non-existent q='
+            f'"{non_existent_query}"',
+        )
+
+        with AllureReporting.add_step(
+            f'Search with q="{non_existent_query}"',
+        ):
+            response = checklists_client.search_checklists(
+                q=non_existent_query,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify empty results'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                checklists = response.json()
+                Assert.is_empty(checklists)
+                logger.info('Received empty results for non-existent query')
+
+            except AssertionError:
+                logger.error(
+                    f'Expected empty results for q="{non_existent_query}"',
+                )
+                pytest.fail(
+                    f'Expected empty array for non-existent query, '
+                    f'got {len(checklists)} results',
+                )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search checklists')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-037: Search checklists with limit exceeded')
+    @pytest.mark.positive
+    def test_search_checklists_limit_exceeded(
+            self, checklists_client, test_data,
+    ):
+
+        checklist_name = test_data.get('checklist_name')
+        search_substring = checklist_name[:5]
+
+        logger.info(
+            '>>> TEST: Search checklists with limit=100 (exceeds max)',
+        )
+
+        with AllureReporting.add_step(
+            'Search with limit=100',
+        ):
+            response = checklists_client.search_checklists(
+                q=search_substring,
+                limit=100,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify limit applied'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                checklists = response.json()
+                Assert.less_than(len(checklists), 51)
+                logger.info(
+                    f'Limit applied: got {len(checklists)} checklists '
+                    f'(max 50)',
+                )
+
+            except AssertionError:
+                logger.error('Limit validation failed')
+                pytest.fail('Server should limit results to 50')
+
+        logger.info('<<< TEST PASSED')

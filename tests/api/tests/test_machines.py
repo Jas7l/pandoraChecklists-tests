@@ -1371,7 +1371,7 @@ class TestMachinesAPI:
     @pytest.mark.positive
     def test_search_machines_limit_exceeded(self, machines_client, test_data):
 
-        machine_name = test_data.get('machine_name')
+        machine_name = self.TEST_NAME
         search_substring = machine_name[:5]
 
         logger.info(
@@ -1383,6 +1383,7 @@ class TestMachinesAPI:
         ):
             response = machines_client.search_machines(
                 q=search_substring,
+                deleted=True,
                 limit=100,
             )
             AllureReporting.attach_response(
