@@ -998,3 +998,410 @@ class TestMachinesAPI:
                 )
 
         logger.info('<<< TEST PASSED')
+
+    @allure.story('Search machines')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-018: Search machines by substring')
+    @pytest.mark.positive
+    def test_search_machines_by_substring(self, machines_client, test_data):
+
+        machine_name = test_data.get('machine_name')
+        search_substring = machine_name[:5]
+
+        logger.info(
+            f'>>> TEST: Search machines by substring "{search_substring}"',
+        )
+
+        with AllureReporting.add_step(
+            f'Search machines with q="{search_substring}"',
+        ):
+            response = machines_client.search_machines(q=search_substring)
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify search results'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                machines = response.json()
+                Assert.is_not_empty(machines)
+
+                found_machine = any(
+                    machine_name.lower() in machine.get('machine_name').lower()
+                    for machine in machines
+                )
+
+                Assert.is_true(found_machine)
+                logger.info(
+                    f'Machine "{machine_name}" found in search results',
+                )
+
+                q_lower = search_substring.lower()
+                starts_with_q = []
+                contains_q = []
+
+                for machine in machines:
+                    machine_name_lower = machine.get('machine_name').lower()
+                    if machine_name_lower.startswith(q_lower):
+                        starts_with_q.append(machine_name_lower)
+                    elif q_lower in machine_name_lower:
+                        contains_q.append(machine_name_lower)
+
+                for machine in machines:
+                    Assert.is_true(
+                        search_substring.lower() in machine.get(
+                            'machine_name').lower(),
+                    )
+
+                logger.info(
+                    f'Search results: total={len(machines)}, '
+                    f'starts_with_q={len(starts_with_q)}, '
+                    f'contains_q={len(contains_q)}',
+                )
+
+            except AssertionError:
+                logger.error(
+                    f'Search failed for query="{search_substring}"',
+                )
+                pytest.fail(
+                    f'Expected to find machine "{machine_name}" '
+                    f'in search results',
+                )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search machines')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-019: Search machines with pagination')
+    @pytest.mark.positive
+    def test_search_machines_pagination(self, machines_client, test_data):
+
+        machine_name = test_data.get('machine_name')
+        search_substring = machine_name[:5]
+
+        logger.info(
+            f'>>> TEST: Search machines with pagination, '
+            f'q="{search_substring}"',
+        )
+
+        with AllureReporting.add_step(
+            'Search with limit=1, offset=0',
+        ):
+            response = machines_client.search_machines(
+                q=search_substring,
+                limit=1,
+                offset=0,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify first page'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                machines_page1 = response.json()
+                Assert.is_not_empty(machines_page1)
+                Assert.less_than(len(machines_page1), 2)
+
+                logger.info(f'First page: {len(machines_page1)} machines')
+
+            except AssertionError:
+                logger.error('Failed to get first page')
+                pytest.fail('Pagination first page failed')
+
+        with AllureReporting.add_step(
+            'Search with limit=1, offset=1',
+        ):
+            response = machines_client.search_machines(
+                q=search_substring,
+                limit=1,
+                offset=1,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify second page'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                machines_page2 = response.json()
+
+                if len(machines_page1) > 0 and len(machines_page2) > 0:
+                    Assert.not_equal(
+                        machines_page1[0].get('machine_id'),
+                        machines_page2[0].get('machine_id'),
+                    )
+                    logger.info(
+                        'Pagination works: different machines on pages',
+                    )
+
+            except AssertionError:
+                logger.error('Pagination verification failed')
+                pytest.fail('Pagination pages are identical')
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search machines')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-020: Search machines with deleted=true')
+    @pytest.mark.positive
+    def test_search_machines_deleted(self, machines_client, test_data):
+
+        machine_name = test_data.get('machine_name')
+        area_id = test_data.get('area_id')
+        search_substring = machine_name[:5]
+        created_machine_id = None
+
+        logger.info(
+            f'>>> TEST: Search deleted machines with q="{search_substring}"',
+        )
+
+        with AllureReporting.add_step(
+            f'Create machine "{self.TEST_NAME}_deleted" for deletion test',
+        ):
+            response = machines_client.create_machine(
+                machine_name=f'{self.TEST_NAME}_deleted',
+                area_id=area_id,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        try:
+            Assert.response_status(response.status_code, 201)
+            machine = response.json()
+            created_machine_id = machine.get('machine_id')
+            logger.info(
+                f'Machine created for deletion: {created_machine_id}',
+            )
+
+        except AssertionError:
+            logger.error('Failed to create machine for deletion test')
+            pytest.fail('Machine creation failed')
+
+        with AllureReporting.add_step(
+            f'Delete machine {created_machine_id}',
+        ):
+            response = machines_client.delete_machine(created_machine_id)
+            AllureReporting.attach_response(response.status_code)
+
+        try:
+            Assert.response_status(response.status_code, 204)
+            logger.info(f'Machine {created_machine_id} deleted')
+        except AssertionError:
+            logger.error('Failed to delete machine')
+            pytest.fail('Machine deletion failed')
+
+        with AllureReporting.add_step(
+            'Search deleted machines with deleted=true',
+        ):
+            response = machines_client.search_machines(
+                q=self.TEST_NAME,
+                deleted=True,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify deleted machine found'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                machines = response.json()
+                Assert.is_not_empty(machines)
+
+                found_deleted = any(
+                    self.TEST_NAME.lower() in machine.get(
+                        'machine_name').lower()
+                    for machine in machines
+                )
+
+                Assert.is_true(found_deleted)
+                logger.info('Deleted machine found in search results')
+
+            except AssertionError:
+                logger.error('Deleted machine not found')
+                pytest.fail('Expected to find deleted machine')
+
+        with AllureReporting.add_step(
+            'Search active machines with deleted=false',
+        ):
+            response = machines_client.search_machines(
+                q=self.TEST_NAME,
+                deleted=False,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify deleted machine not in active'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                machines = response.json()
+
+                found_deleted_active = any(
+                    self.TEST_NAME.lower() in machine.get(
+                        'machine_name').lower()
+                    for machine in machines
+                )
+
+                Assert.is_false(found_deleted_active)
+                logger.info('Deleted machine not found in active search')
+
+            except AssertionError:
+                logger.error('Deleted machine found in active search')
+                pytest.fail('Deleted machine should not be in active search')
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search machines')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-021: Search machines with q shorter than 2 chars')
+    @pytest.mark.negative
+    def test_search_machines_q_too_short(self, machines_client):
+
+        logger.info('>>> TEST: Search machines with q="a" (too short)')
+
+        with AllureReporting.add_step('Search with q="a"'):
+            response = machines_client.search_machines(q='a')
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify 400 error'):
+            try:
+                Assert.response_status(response.status_code, 400)
+                logger.info('Received expected 400 error for q too short')
+            except AssertionError:
+                logger.error(
+                    f'Expected 400 error, got {response.status_code}',
+                )
+                pytest.fail(
+                    f'Expected 400 error for q too short, '
+                    f'got status {response.status_code}',
+                )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search machines')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-022: Search machines with empty q')
+    @pytest.mark.negative
+    def test_search_machines_q_empty(self, machines_client):
+
+        logger.info('>>> TEST: Search machines with q=""')
+
+        with AllureReporting.add_step('Search with q=""'):
+            response = machines_client.search_machines(q='')
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify 400 error'):
+            try:
+                Assert.response_status(response.status_code, 400)
+                logger.info('Received expected 400 error for q empty')
+            except AssertionError:
+                logger.error(
+                    f'Expected 400 error, got {response.status_code}',
+                )
+                pytest.fail(
+                    f'Expected 400 error for q empty, '
+                    f'got status {response.status_code}',
+                )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search machines')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-023: Search machines with non-existent substring')
+    @pytest.mark.positive
+    def test_search_machines_no_results(self, machines_client):
+
+        non_existent_query = 'nonexistent_xyz_123'
+
+        logger.info(
+            f'>>> TEST: Search machines with non-existent q='
+            f'"{non_existent_query}"',
+        )
+
+        with AllureReporting.add_step(
+            f'Search with q="{non_existent_query}"',
+        ):
+            response = machines_client.search_machines(q=non_existent_query)
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify empty results'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                machines = response.json()
+                Assert.is_empty(machines)
+                logger.info('Received empty results for non-existent query')
+
+            except AssertionError:
+                logger.error(
+                    f'Expected empty results for q="{non_existent_query}"',
+                )
+                pytest.fail(
+                    f'Expected empty array for non-existent query, '
+                    f'got {len(machines)} results',
+                )
+
+        logger.info('<<< TEST PASSED')
+
+    @allure.story('Search machines')
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title('API-TC-024: Search machines with limit exceeded')
+    @pytest.mark.positive
+    def test_search_machines_limit_exceeded(self, machines_client, test_data):
+
+        machine_name = test_data.get('machine_name')
+        search_substring = machine_name[:5]
+
+        logger.info(
+            '>>> TEST: Search machines with limit=100 (exceeds max)',
+        )
+
+        with AllureReporting.add_step(
+            'Search with limit=100',
+        ):
+            response = machines_client.search_machines(
+                q=search_substring,
+                limit=100,
+            )
+            AllureReporting.attach_response(
+                response.status_code,
+                response.json(),
+            )
+
+        with AllureReporting.add_step('Verify limit applied'):
+            try:
+                Assert.response_status(response.status_code, 200)
+
+                machines = response.json()
+                Assert.less_than(len(machines), 51)
+                logger.info(
+                    f'Limit applied: got {len(machines)} machines (max 50)',
+                )
+
+            except AssertionError:
+                logger.error('Limit validation failed')
+                pytest.fail('Server should limit results to 50')
+
+        logger.info('<<< TEST PASSED')

@@ -81,3 +81,22 @@ class MachinesClient(BaseApiClient):
             payload['status'] = status
 
         return self.patch(f'/machines/{machine_id}', json=payload)
+
+    def search_machines(
+            self,
+            q: str,
+            deleted: Optional[bool] = None,
+            limit: int = 20,
+            offset: int = 0,
+    ) -> requests.Response:
+        """Search machines by name substring"""
+
+        params = {
+            'q': q,
+            'limit': limit,
+            'offset': offset,
+        }
+        if deleted is not None:
+            params['deleted'] = deleted
+
+        return self.get('/machines/search', params=params)
